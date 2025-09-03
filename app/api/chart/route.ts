@@ -16,7 +16,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid 'text'." }, { status: 400 });
     }
 
-    // System prompt steers the model to strict JSON (no backticks, no extra commentary).
     const system = `You convert legal/academic text into a directed graph of nodes and edges for diagramming.
 Return ONLY valid JSON that matches this TypeScript type:
 
@@ -38,19 +37,19 @@ Rules:
 
     const user = `TEXT TO MAP:\n${text}`;
 
-    // Responses API with JSON biasing
-    const resp = await client.responses.create({
+    // Use Chat Completions (compatible with all recent SDK versions)
+    const completion = await client.chat.completions.create({
       model: "gpt-4o-mini",
-      reasoning: { effort: "medium" },
       temperature: 0.2,
-      response_format: { type: "json_object" },
-      input: [
+      messages: [
         { role: "system", content: system },
         { role: "user", content: user },
       ],
     });
 
-    const raw = resp.output_text ?? "";
+    const raw =
+      completion.choices?.[0]?.message?.content?.trim() ?? "";
+
     let parsed;
     try {
       parsed = JSON.parse(raw);
@@ -61,9 +60,7 @@ Rules:
       );
     }
 
-    // Validate with zod for safety
     const graph = GraphSchema.parse(parsed);
-
     const mermaid = toMermaid(graph);
     return NextResponse.json({ mermaid });
   } catch (err: any) {
