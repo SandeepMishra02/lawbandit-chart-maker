@@ -1,40 +1,63 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 import MermaidView from "@/components/MermaidView";
+import { Mode, Dir } from "@/lib/types";
 
-const SAMPLE = `Rule: An assignment is accepted if submitted before 11:59pm on the due date.
+// --------- Law-student friendly presets ----------
+type Preset = { label: string; mode: Mode; text: string };
+
+const PRESETS: Preset[] = [
+  {
+    label: "Rules map: deadline + exceptions",
+    mode: Mode.Rules,
+    text: `Rule: An assignment is accepted if submitted before 11:59pm on the due date.
 Exceptions:
 - Extension granted by instructor.
 - System outage confirmed by IT.
 Outputs:
 - Accepted (on time or approved extension).
-- Rejected (late without exception).`;
+- Rejected (late without exception).`,
+  },
+  {
+    label: "Timeline: case events",
+    mode: Mode.Timeline,
+    text: `Jan 5: File complaint.
+Jan 20: Defendant answers.
+Feb 2: Motion to dismiss filed.
+Feb 28: Hearing.
+Mar 10: Order issued.`,
+  },
+  {
+    label: "Flowchart: IRAC outline",
+    mode: Mode.Flow,
+    text: `Issue: Was there consideration?
+Rules: Promise must be bargained for.
+Analysis: Past consideration is insufficient.
+Conclusion: Agreement unenforceable.`,
+  },
+];
 
-type Mode = "flowchart" | "timeline" | "rules";
-type Dir = "TB" | "BT" | "LR" | "RL";
+// Fallback sample if no ?q=
+const SAMPLE = PRESETS[0].text;
 
 export default function Home() {
   const [text, setText] = useState("");
-  const [mode, setMode] = useState<Mode>("rules");
-  const [direction, setDirection] = useState<Dir>("TB");
-
-
-  const [mermaid, setMermaid] = useState<string>(
-    'flowchart TB\nn0["Paste text and click Generate"]'
-  );
-
+  const [mode, setMode] = useState<Mode>(Mode.Rules);
+  const [direction, setDirection] = useState<Dir>(Dir.TB);
+  const [code, setCode] = useState<string>(""); // Mermaid code (string)
   const [isLoading, setIsLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // Prefill from ?q= or use a friendly sample
   useEffect(() => {
     const q = new URL(window.location.href).searchParams.get("q");
-    setText(q ? q : SAMPLE);
+    setText(q ?? SAMPLE);
   }, []);
 
-  const disabled = isLoading || !text.trim();
-
   async function onGenerate() {
+    if (!text.trim()) return;
     setIsLoading(true);
     setErr(null);
     try {
@@ -43,109 +66,157 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, mode, direction }),
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
 
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data?.error || `Request failed (${res.status})`);
-      }
-
-      // API returns 
-      setMermaid(data.mermaid as string);
+      // Accept any of these keys from the API
+      const mermaidCode: string = data.mermaid ?? data.code ?? data.svg ?? "";
+      if (!mermaidCode) throw new Error("Empty response from model");
+      setCode(mermaidCode);
+      toast.success("Diagram generated");
     } catch (e: any) {
-      setErr(e?.message || "Something went wrong. Please try again.");
+      const msg = e?.message || "Something went wrong. Please try again.";
+      setErr(msg);
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }
   }
 
   function downloadSvg() {
-    // Grab the currently rendered SVG from the preview pane
-    const svgEl = document.querySelector<HTMLDivElement>("#preview")?.querySelector("svg");
+    const svgEl = document.querySelector("svg");
     if (!svgEl) return;
     const blob = new Blob([svgEl.outerHTML], { type: "image/svg+xml;charset=utf-8" });
     const url = URL.createObjectURL(blob);
-    const a = Object.assign(document.createElement("a"), { href: url, download: "chart.svg" });
+    const a = Object.assign(document.createElement("a"), {
+      href: url,
+      download: "chart.svg",
+    });
     a.click();
     URL.revokeObjectURL(url);
   }
 
+  function copySvg() {
+    const svgEl = document.querySelector("svg");
+    if (!svgEl) return;
+    navigator.clipboard
+      .writeText(svgEl.outerHTML)
+      .then(() => toast.success("SVG copied to clipboard"))
+      .catch(() => toast.error("Failed to copy SVG"));
+  }
+
+  const disabled = isLoading || !text.trim();
+
   return (
-    <main className="max-w-6xl mx-auto p-6 space-y-4">
-      <h1 className="text-2xl font-semibold">LLM-Powered Chart Maker</h1>
-      <p className="text-sm text-gray-600">
+    <main className="container">
+      <h1 className="h1">LLM-Powered Chart Maker</h1>
+      <p className="hint">
         Highlight or paste text → choose a mode → generate a flowchart. Export as SVG.
       </p>
 
-      {err && (
-        <div className="rounded-md border border-red-200 bg-red-50 text-red-700 px-3 py-2">
-          {err}
-        </div>
-      )}
+      {err && <div className="alert">{err}</div>}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <section className="space-y-3">
-          <label className="block text-sm font-medium">Input text</label>
+      <section className="grid">
+        {/* LEFT: input + controls */}
+        <div>
+          <label className="label">Input text</label>
           <textarea
+            className="textarea"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            className="w-full h-[260px] border rounded-md p-3 focus:outline-none"
             placeholder="Paste the instructions, rules, or outline here…"
           />
 
-          <div className="flex gap-3 items-center">
+          <div className="controls" style={{ marginTop: 12 }}>
+            {/* Presets */}
+            <select
+              onChange={(e) => {
+                const p = PRESETS.find((x) => x.label === e.target.value);
+                if (!p) return;
+                setText(p.text);
+                setMode(p.mode);
+              }}
+              defaultValue=""
+              className="select"
+              title="Quick law-student presets"
+            >
+              <option value="" disabled>
+                Choose a preset…
+              </option>
+              {PRESETS.map((p) => (
+                <option key={p.label} value={p.label}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+
+            {/* Mode */}
             <select
               value={mode}
               onChange={(e) => setMode(e.target.value as Mode)}
-              className="border rounded-md p-2"
+              className="select"
+              title="Chart mode"
             >
-              <option value="flowchart">Flowchart</option>
-              <option value="timeline">Timeline (chronological)</option>
-              <option value="rules">Rules (main rule → exceptions)</option>
+              <option value={Mode.Flow}>Flowchart</option>
+              <option value={Mode.Timeline}>Timeline (chronological)</option>
+              <option value={Mode.Rules}>Rules (main rule → exceptions)</option>
             </select>
 
+            {/* Direction */}
             <select
               value={direction}
               onChange={(e) => setDirection(e.target.value as Dir)}
-              className="border rounded-md p-2"
+              className="select"
+              title="Layout direction"
             >
-              <option value="TB">Top → Bottom</option>
-              <option value="BT">Bottom → Top</option>
-              <option value="LR">Left → Right</option>
-              <option value="RL">Right → Left</option>
+              <option value={Dir.TB}>Top → Bottom</option>
+              <option value={Dir.LR}>Left → Right</option>
+              <option value={Dir.BT}>Bottom → Top</option>
+              <option value={Dir.RL}>Right → Left</option>
             </select>
 
-            <button
-              onClick={onGenerate}
-              disabled={disabled}
-              className={`px-4 py-2 rounded-md text-white ${
-                disabled ? "bg-blue-300" : "bg-blue-600 hover:bg-blue-700"
-              }`}
-            >
+            {/* Generate */}
+            <button onClick={onGenerate} disabled={disabled} className="button primary">
               {isLoading ? "Generating…" : "Generate"}
             </button>
           </div>
 
-          <button
-            onClick={downloadSvg}
-            className="mt-2 px-4 py-2 rounded-md border hover:bg-gray-50"
-          >
-            Download SVG
-          </button>
-        </section>
+          <div className="controls" style={{ marginTop: 12 }}>
+            <button onClick={downloadSvg} disabled={!code} className="button ghost">
+              Download SVG
+            </button>
+            <button onClick={copySvg} disabled={!code} className="button ghost">
+              Copy SVG
+            </button>
+          </div>
+        </div>
 
-        <section className="space-y-3">
-          <label className="block text-sm font-medium">Preview</label>
-          <div id="preview" className="border rounded-md p-3 h-[320px] overflow-auto">
-            {isLoading ? (
-              <div className="h-full flex items-center justify-center text-sm text-gray-500">
-                Asking the model…
+        {/* RIGHT: preview */}
+        <div>
+          <label className="label">Preview</label>
+          <div
+            className="card preview overflow-auto"
+            style={{ maxHeight: "150vh" }} 
+          >
+            {!code ? (
+              <div
+                style={{
+                  height: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "var(--muted)",
+                  fontSize: 14,
+                }}
+              >
+                {isLoading ? "Asking the model…" : "Paste text (or pick a preset) and click Generate"}
               </div>
             ) : (
-              <MermaidView code={mermaid} />
+              <MermaidView code={code} />
             )}
           </div>
-        </section>
-      </div>
+        </div>
+      </section>
     </main>
   );
 }

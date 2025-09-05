@@ -3,34 +3,39 @@
 import { useEffect, useRef } from "react";
 import mermaid from "mermaid";
 
-type Props = {
-  code: string;
-};
+type Props = { code: string };
 
+/** Renders Mermaid SVG and re-renders on theme change */
 export default function MermaidView({ code }: Props) {
   const ref = useRef<HTMLDivElement>(null);
 
+  async function render(theme: "light" | "dark") {
+    // Re-init before each render (hot-reload friendly + theme switch)
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "loose",
+      theme: theme === "dark" ? "dark" : "default",
+    });
+
+    const id = "mmd-" + Math.random().toString(36).slice(2);
+    const { svg } = await mermaid.render(id, code);
+    if (ref.current) ref.current.innerHTML = svg;
+  }
+
   useEffect(() => {
-    let cancelled = false;
+    const getTheme = () =>
+      (document.documentElement.getAttribute("data-theme") as "light" | "dark") ||
+      "light";
 
-    async function render() {
-      try {
-        // (Re)init for hot reload friendliness
-        mermaid.initialize({ startOnLoad: false, theme: "default", securityLevel: "loose" });
-        const id = "mmd-" + Math.random().toString(36).slice(2);
-        const { svg } = await mermaid.render(id, code);
-        if (!cancelled && ref.current) ref.current.innerHTML = svg;
-      } catch (e) {
-        if (ref.current) ref.current.innerHTML =
-          `<pre class="text-red-600 text-sm whitespace-pre-wrap">${(e as Error)?.message ?? e}</pre>`;
-      }
-    }
+    // initial render
+    render(getTheme()).catch(() => {});
 
-    render();
-    return () => { cancelled = true; };
+    // re-render on themechange
+    const onTheme = () => render(getTheme()).catch(() => {});
+    window.addEventListener("themechange", onTheme);
+    return () => window.removeEventListener("themechange", onTheme);
   }, [code]);
 
-  return (
-    <div className="w-full overflow-auto border rounded-lg p-3 bg-white" ref={ref} />
-  );
+  return <div className="preview card" ref={ref} />;
 }
+
