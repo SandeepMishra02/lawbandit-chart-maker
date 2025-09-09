@@ -1,4 +1,4 @@
-//schema that describes the structure we expect back from the LLM.
+//schema that describes the structure we expect back from the LLM
 
 import { z } from "zod";
 
@@ -21,7 +21,7 @@ export const GraphSchema = z.object({
 
 export type Graph = z.infer<typeof GraphSchema>;
 
-// Helper to turn our validated graph into Mermaid string.
+// Helper to turn our validated graph into Mermaid string
 export function toMermaid(g: Graph): string {
   const header = `flowchart ${g.direction}`;
   const nodeLines = g.nodes.map(n => `${n.id}["${escapeMermaid(n.label)}"]`);
@@ -34,6 +34,6 @@ export function toMermaid(g: Graph): string {
 }
 
 function escapeMermaid(s: string): string {
-  // Mermaid is picky about quotes/brackets; quick sanitization helps prevent rendering errors.
+  // Mermaid is picky about quotes/brackets in labels
   return s.replace(/"/g, '\\"').replace(/\n/g, "\\n");
 }

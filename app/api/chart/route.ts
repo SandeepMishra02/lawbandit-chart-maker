@@ -37,7 +37,6 @@ Rules:
 
     const user = `TEXT TO MAP:\n${text}`;
 
-    // Use Chat Completions (compatible with all recent SDK versions)
     const completion = await client.chat.completions.create({
       model: "gpt-4o-mini",
       temperature: 0.2,

@@ -1,6 +1,6 @@
 "use client";
 
-/** Mount-time theme bootstrap (runs before paint) */
+// Sets initial theme based on saved preference or system setting
 export default function ThemeScript() {
   return (
     <script

@@ -5,12 +5,12 @@ import mermaid from "mermaid";
 
 type Props = { code: string };
 
-/** Renders Mermaid SVG and re-renders on theme change */
+//Renders Mermaid SVG and re-renders on theme change 
 export default function MermaidView({ code }: Props) {
   const ref = useRef<HTMLDivElement>(null);
 
   async function render(theme: "light" | "dark") {
-    // Re-init before each render (hot-reload friendly + theme switch)
+    
     mermaid.initialize({
       startOnLoad: false,
       securityLevel: "loose",

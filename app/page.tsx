@@ -5,7 +5,7 @@ import toast from "react-hot-toast";
 import MermaidView from "@/components/MermaidView";
 import { Mode, Dir } from "@/lib/types";
 
-// --------- Law-student friendly presets ----------
+// Presets that could apply to law students
 type Preset = { label: string; mode: Mode; text: string };
 
 const PRESETS: Preset[] = [
