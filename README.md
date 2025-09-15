@@ -94,7 +94,7 @@ npm start       # Run the production build
 
 Here’s an example of text turned into a rules diagram:
 
-_(insert screenshot or GIF here)_
+![Demo](./Demo.png)
 
 ---
 
